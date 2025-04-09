@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <!-- ****** Crucial Meta Tags for iOS Home Screen App ****** -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Camera App">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- ****** App Icon ****** -->
+    <!-- Replace 'app-icon.png' with your actual 180x180 or larger icon file -->
+    <link rel="apple-touch-icon" href="app-icon.png">
+
+    <!-- ****** Regular HTML Title ****** -->
+    <title>Camera Web App</title>
+
+    <style>
+        /* Basic Reset & Full Screen Setup */
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrolling on the body */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000; /* Black background often suits camera feeds */
+            color: #fff; /* White text for contrast */
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* Main App Container */
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            /* Adjust padding top for status bar */
+            padding-top: constant(safe-area-inset-top); /* iOS 11 */
+            padding-top: env(safe-area-inset-top);    /* iOS 11.2+ */
+        }
+
+        /* Header Styling */
+        header {
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            font-size: 1.1em;
+            font-weight: 600;
+            flex-shrink: 0; /* Prevent header from shrinking */
+            position: relative; /* Keep header layering */
+            z-index: 10;
+        }
+
+        /* Main Content Area - Now holds the video */
+        main {
+            flex-grow: 1; /* Allow content to take up remaining space */
+            overflow: hidden; /* Hide anything that might overflow */
+            position: relative; /* Needed for positioning video/error messages */
+            background-color: #111; /* Fallback background if video fails */
+        }
+
+        /* Video Feed Styling */
+        #cameraFeed {
+            display: block; /* Remove extra space below */
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Cover the area, potentially cropping */
+            position: absolute; /* Position within main */
+            top: 0;
+            left: 0;
+        }
+
+        /* Error Message Styling */
+        #errorMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffcc00; /* Warning yellow */
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            display: none; /* Hidden by default */
+            z-index: 5; /* Above video, below header/footer */
+        }
+
+        /* Footer Styling (Example) */
+        footer {
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+            padding: 8px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #ccc;
+            flex-shrink: 0; /* Prevent footer from shrinking */
+            position: relative;
+            z-index: 10;
+            /* Adjust padding bottom for home indicator/nav bar */
+             padding-bottom: calc(8px + constant(safe-area-inset-bottom)); /* iOS 11 */
+             padding-bottom: calc(8px + env(safe-area-inset-bottom));    /* iOS 11.2+ */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <header>
+            Live Camera Feed
+        </header>
+
+        <main>
+            <!-- Video element to display the camera stream -->
+            <video id="cameraFeed" playsinline autoplay muted></video>
+            <!-- Area to display errors (e.g., permission denied) -->
+            <div id="errorMessage"></div>
+        </main>
+
+        <footer>
+            Camera App Footer
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoElement = document.getElementById('cameraFeed');
+            const errorMessageElement = document.getElementById('errorMessage');
+
+            // --- Camera Access ---
+
+            // Check if getUserMedia is supported
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                
+                // Define constraints: request video, default to back camera ('environment')
+                // Change to { facingMode: 'user' } for front camera
+                const constraints = {
+                    video: {
+                        facingMode: 'environment', // 'user' for front camera
+                        // Optional: Request specific resolutions (might not be respected)
+                        // width: { ideal: 1920 },
+                        // height: { ideal: 1080 }
+                    },
+                    audio: false // We don't need audio for this example
+                };
+
+                // Request camera access
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then((stream) => {
+                        console.log("Camera stream acquired.");
+                        // Assign the stream to the video element
+                        videoElement.srcObject = stream;
+                        // Play should happen automatically due to 'autoplay', but call it just in case
+                        videoElement.play().catch(playErr => {
+                           console.error("Error trying to play video:", playErr);
+                           // Autoplay might be blocked, might need user interaction
+                           // You could add a button here to manually start play
+                           showError("Tap/click needed to start video playback.");
+                        });
+                    })
+                    .catch((error) => {
+                        console.error("Error accessing media devices.", error);
+                        let userMessage = "Could not access the camera.";
+                        if (error.name === 'NotAllowedError') {
+                            userMessage = "Permission denied. Please allow camera access in browser settings.";
+                        } else if (error.name === 'NotFoundError') {
+                            userMessage = "No camera found. Ensure a camera is connected and enabled.";
+                        } else if (error.name === 'NotReadableError') {
+                             userMessage = "Camera is already in use or a hardware error occurred.";
+                        } else if (location.protocol !== 'https:') {
+                             userMessage = "Camera access requires a secure connection (HTTPS).";
+                        }
+                        showError(userMessage + "<br><small>(" + error.name + ")</small>");
+                    });
+
+            } else {
+                console.error("getUserMedia is not supported by this browser.");
+                showError("Your browser does not support camera access (getUserMedia API).");
+            }
+
+            function showError(message) {
+                if (errorMessageElement) {
+                    errorMessageElement.innerHTML = message;
+                    errorMessageElement.style.display = 'block';
+                }
+                // Optionally hide the video element if there's a critical error
+                // if (videoElement) videoElement.style.display = 'none';
+            }
+            
+             // --- Prevent Body Scroll (important for PWA feel) ---
+             // This prevents the background 'bounce' on iOS when running standalone
+              document.body.addEventListener('touchmove', function (e) {
+                 // Allow scrolling only within elements that specifically have it enabled
+                 // In this case, no element inside #app is scrollable, so we prevent all.
+                 e.preventDefault();
+             }, { passive: false }); // Need passive: false to call preventDefault
+
+
+            console.log("Camera App Initialized");
+        });
+    </script>
+
+</body>
+</html>
