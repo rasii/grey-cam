@@ -2,208 +2,209 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
-    <!-- ****** Crucial Meta Tags for iOS Home Screen App ****** -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Camera App">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-
-    <!-- ****** App Icon ****** -->
-    <!-- Replace 'app-icon.png' with your actual 180x180 or larger icon file -->
-    <link rel="apple-touch-icon" href="app-icon.png">
-
-    <!-- ****** Regular HTML Title ****** -->
-    <title>Camera Web App</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grayscale Camera Feed with Crosshair & Munsell</title>
     <style>
-        /* Basic Reset & Full Screen Setup */
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: rgba(0,0,0,0);
-        }
-
-        html, body {
-            height: 100%;
+        body, html {
             margin: 0;
             padding: 0;
-            overflow: hidden; /* Prevent scrolling on the body */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #000; /* Black background often suits camera feeds */
-            color: #fff; /* White text for contrast */
-            -webkit-text-size-adjust: 100%;
-        }
-
-        /* Main App Container */
-        #app {
+            height: 100%;
             display: flex;
             flex-direction: column;
-            height: 100%;
-            /* Adjust padding top for status bar */
-            padding-top: constant(safe-area-inset-top); /* iOS 11 */
-            padding-top: env(safe-area-inset-top);    /* iOS 11.2+ */
+            background-color: black;
         }
 
-        /* Header Styling */
-        header {
-            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
-            color: white;
-            padding: 10px 15px;
-            text-align: center;
-            font-size: 1.1em;
-            font-weight: 600;
-            flex-shrink: 0; /* Prevent header from shrinking */
-            position: relative; /* Keep header layering */
-            z-index: 10;
+        #videoElement, #canvasElement {
+            width: 90vw;
+            height: 90vh;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            position: relative;
+            align-self: center;
         }
 
-        /* Main Content Area - Now holds the video */
-        main {
-            flex-grow: 1; /* Allow content to take up remaining space */
-            overflow: hidden; /* Hide anything that might overflow */
-            position: relative; /* Needed for positioning video/error messages */
-            background-color: #111; /* Fallback background if video fails */
-        }
-
-        /* Video Feed Styling */
-        #cameraFeed {
-            display: block; /* Remove extra space below */
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* Cover the area, potentially cropping */
-            position: absolute; /* Position within main */
-            top: 0;
-            left: 0;
-        }
-
-        /* Error Message Styling */
-        #errorMessage {
+        #canvasElement {
+            display: none;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: #ffcc00; /* Warning yellow */
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            display: none; /* Hidden by default */
-            z-index: 5; /* Above video, below header/footer */
         }
 
-        /* Footer Styling (Example) */
-        footer {
-            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
-            padding: 8px;
-            text-align: center;
-            font-size: 0.8em;
-            color: #ccc;
-            flex-shrink: 0; /* Prevent footer from shrinking */
-            position: relative;
+        #videoElement, #canvasElement {
+            filter: grayscale(100%);
+        }
+
+        #controls {
+            margin-top: auto;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
             z-index: 10;
-            /* Adjust padding bottom for home indicator/nav bar */
-             padding-bottom: calc(8px + constant(safe-area-inset-bottom)); /* iOS 11 */
-             padding-bottom: calc(8px + env(safe-area-inset-bottom));    /* iOS 11.2+ */
         }
 
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #crosshair {
+            position: absolute;
+            pointer-events: none;
+            display: none;
+            border: 1px solid red;
+            width: 15px;
+            height: 15px;
+            transform: translate(-50%, -50%);
+            z-index: 11;
+        }
+
+        #munsellValue {
+            position: absolute;
+            pointer-events: none;
+            display: none;
+            color: white;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 5px;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 12;
+        }
     </style>
 </head>
 <body>
+    <video id="videoElement" autoplay playsinline></video>
+    <canvas id="canvasElement"></canvas>
+    <div id="crosshair"></div>
+    <div id="munsellValue"></div>
 
-    <div id="app">
-        <header>
-            Live Camera Feed
-        </header>
-
-        <main>
-            <!-- Video element to display the camera stream -->
-            <video id="cameraFeed" playsinline autoplay muted></video>
-            <!-- Area to display errors (e.g., permission denied) -->
-            <div id="errorMessage"></div>
-        </main>
-
-        <footer>
-            Camera App Footer
-        </footer>
+    <div id="controls">
+        <button id="freezeButton">Freeze</button>
+        <button id="grayscaleButton">Color</button>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const videoElement = document.getElementById('cameraFeed');
-            const errorMessageElement = document.getElementById('errorMessage');
+            const videoElement = document.getElementById('videoElement');
+            const canvasElement = document.getElementById('canvasElement');
+            const ctx = canvasElement.getContext('2d');
+            const freezeButton = document.getElementById('freezeButton');
+            const grayscaleButton = document.getElementById('grayscaleButton');
+            const crosshair = document.getElementById('crosshair');
+            const munsellValueDisplay = document.getElementById('munsellValue');
 
-            // --- Camera Access ---
+            let isFrozen = false;
+            let isGrayscale = true;
+            let crosshairVisible = false;
 
-            // Check if getUserMedia is supported
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                
-                // Define constraints: request video, default to back camera ('environment')
-                // Change to { facingMode: 'user' } for front camera
-                const constraints = {
-                    video: {
-                        facingMode: 'environment', // 'user' for front camera
-                        // Optional: Request specific resolutions (might not be respected)
-                        // width: { ideal: 1920 },
-                        // height: { ideal: 1080 }
-                    },
-                    audio: false // We don't need audio for this example
-                };
+                const constraints = { video: { facingMode: 'environment' } };
 
-                // Request camera access
                 navigator.mediaDevices.getUserMedia(constraints)
-                    .then((stream) => {
-                        console.log("Camera stream acquired.");
-                        // Assign the stream to the video element
+                    .then(stream => {
                         videoElement.srcObject = stream;
-                        // Play should happen automatically due to 'autoplay', but call it just in case
-                        videoElement.play().catch(playErr => {
-                           console.error("Error trying to play video:", playErr);
-                           // Autoplay might be blocked, might need user interaction
-                           // You could add a button here to manually start play
-                           showError("Tap/click needed to start video playback.");
-                        });
+                        videoElement.onloadedmetadata = function() {
+                            canvasElement.width = videoElement.videoWidth;
+                            canvasElement.height = videoElement.videoHeight;
+                        };
                     })
-                    .catch((error) => {
-                        console.error("Error accessing media devices.", error);
-                        let userMessage = "Could not access the camera.";
-                        if (error.name === 'NotAllowedError') {
-                            userMessage = "Permission denied. Please allow camera access in browser settings.";
-                        } else if (error.name === 'NotFoundError') {
-                            userMessage = "No camera found. Ensure a camera is connected and enabled.";
-                        } else if (error.name === 'NotReadableError') {
-                             userMessage = "Camera is already in use or a hardware error occurred.";
-                        } else if (location.protocol !== 'https:') {
-                             userMessage = "Camera access requires a secure connection (HTTPS).";
-                        }
-                        showError(userMessage + "<br><small>(" + error.name + ")</small>");
+                    .catch(err => {
+                        console.error('Error accessing camera:', err);
+                        navigator.mediaDevices.getUserMedia({ video: true })
+                            .then(stream => {
+                                videoElement.srcObject = stream;
+                                videoElement.onloadedmetadata = function() {
+                                    canvasElement.width = videoElement.videoWidth;
+                                    canvasElement.height = videoElement.videoHeight;
+                                };
+                            })
+                            .catch(err => {
+                                console.error("Error accessing fallback camera: ", err);
+                            });
                     });
-
             } else {
-                console.error("getUserMedia is not supported by this browser.");
-                showError("Your browser does not support camera access (getUserMedia API).");
+                console.error('getUserMedia not supported');
             }
 
-            function showError(message) {
-                if (errorMessageElement) {
-                    errorMessageElement.innerHTML = message;
-                    errorMessageElement.style.display = 'block';
+            freezeButton.addEventListener('click', () => {
+                if (!isFrozen) {
+                    ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    videoElement.style.display = 'none';
+                    canvasElement.style.display = 'block';
+                    freezeButton.textContent = 'Unfreeze';
+                    isFrozen = true;
+                } else {
+                    videoElement.style.display = 'block';
+                    canvasElement.style.display = 'none';
+                    freezeButton.textContent = 'Freeze';
+                    isFrozen = false;
                 }
-                // Optionally hide the video element if there's a critical error
-                // if (videoElement) videoElement.style.display = 'none';
+                updateGrayscale();
+            });
+
+            grayscaleButton.addEventListener('click', () => {
+                isGrayscale = !isGrayscale;
+                updateGrayscale();
+            });
+
+            function updateGrayscale() {
+                if (isGrayscale) {
+                    videoElement.style.filter = 'grayscale(100%)';
+                    canvasElement.style.filter = 'grayscale(100%)';
+                    grayscaleButton.textContent = 'Color';
+                } else {
+                    videoElement.style.filter = 'grayscale(0%)';
+                    canvasElement.style.filter = 'grayscale(0%)';
+                    grayscaleButton.textContent = 'Grayscale';
+                }
             }
-            
-             // --- Prevent Body Scroll (important for PWA feel) ---
-             // This prevents the background 'bounce' on iOS when running standalone
-              document.body.addEventListener('touchmove', function (e) {
-                 // Allow scrolling only within elements that specifically have it enabled
-                 // In this case, no element inside #app is scrollable, so we prevent all.
-                 e.preventDefault();
-             }, { passive: false }); // Need passive: false to call preventDefault
+            updateGrayscale();
 
+            function getMunsellValue(x, y) {
+                const imageData = ctx.getImageData(x - 1, y - 1, 3, 3).data;
+                let sum = 0;
+                for (let i = 0; i < imageData.length; i += 4) {
+                    const gray = 0.299 * imageData[i] + 0.587 * imageData[i + 1] + 0.114 * imageData[i + 2]; // Weighted grayscale
+                    sum += gray;
+                }
+                const average = sum / 9;
+                return Math.round((average / 255) * 10); // Map grayscale to Munsell value range
+            }
 
-            console.log("Camera App Initialized");
+            function displayCrosshairAndMunsell(event) {
+                const rect = canvasElement.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                crosshair.style.left = `${x}px`;
+                crosshair.style.top = `${y}px`;
+                crosshair.style.display = 'block';
+
+                const munsellValue = getMunsellValue(x, y);
+                munsellValueDisplay.textContent = `Munsell Value: ${munsellValue}`;
+                munsellValueDisplay.style.display = 'block';
+
+                crosshairVisible = true;
+            }
+
+            canvasElement.addEventListener('touchstart', (event) => {
+                displayCrosshairAndMunsell(event.touches[0]);
+            });
+            canvasElement.addEventListener('mousedown', displayCrosshairAndMunsell);
+
+            canvasElement.addEventListener('click', () => {
+                if (crosshairVisible) {
+                    crosshair.style.display = 'none';
+                    munsellValueDisplay.style.display = 'none';
+                    crosshairVisible = false;
+                }
+            });
         });
     </script>
-
 </body>
 </html>
